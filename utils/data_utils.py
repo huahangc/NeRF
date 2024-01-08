@@ -5,7 +5,7 @@ data_utils.py
 2、根据传入的参数进行调整参数，主要是图片的resize参数
 """
 import numpy as np
-import torch 
+import torch
 import cv2 as cv
 from pathlib import Path
 from typing import Union
@@ -20,7 +20,8 @@ class DataType(Enum):
     pig = 2
     endo = 3
 
-def __str2path(path:Union[str, Path]):
+
+def __str2path(path: Union[str, Path]):
     """将str转为Path对象
 
     Args:
@@ -32,8 +33,9 @@ def __str2path(path:Union[str, Path]):
     if isinstance(path, str):
         return Path(path)
     return path
-    
-def data_loader(image_path:Union[Path, str], data_type:DataType, resize_factor:float, device:torch.device = None):
+
+
+def data_loader(image_path: Union[Path, str], data_type: DataType, resize_factor: float, device: torch.device = None):
     """  `数据读取的主函数`
     读取数据集，针对不同类型的数据集有不同的读取方法
 
@@ -44,7 +46,7 @@ def data_loader(image_path:Union[Path, str], data_type:DataType, resize_factor:f
         device (torch.device): 表示在那个设备进行
     """
     load_dict = {
-        DataType.llff : _load_llff_data,
+        DataType.llff: _load_llff_data,
         DataType.endo: _load_endo_data,
         DataType.pig: _load_pig_data,
     }
@@ -52,7 +54,9 @@ def data_loader(image_path:Union[Path, str], data_type:DataType, resize_factor:f
     return dict_data
     # todo: 分为三部分进行读取
     pass
-def __load_image_file(img_path:Path, device:torch.device):
+
+
+def __load_image_file(img_path: Path, device: torch.device):
     """读取目录下的图片文件, device等于输入的device设备
     Args:
         img_path (Path): 图片路径
@@ -63,12 +67,13 @@ def __load_image_file(img_path:Path, device:torch.device):
     """
     all_img = []
     for img in tqdm(sorted(img_path.iterdir()), desc="读取路径下图片中····", leave=False):
-        img_data = torch.from_numpy(cv.imread(str(img))[...,::-1].astype(np.float32) / 255.).to(device) # 转化为0-1之间的RGB图像 [H,W,C]
+        img_data = torch.from_numpy(cv.imread(str(img))[..., ::-1].astype(np.float32) / 255.).to(
+            device)  # 转化为0-1之间的RGB图像 [H,W,C]
         all_img.append(img_data)
     return torch.stack(all_img, dim=0), len(all_img)
 
 
-def __resize_image_file(ori_img_path: Path, tar_img_path:Path, resize_factor:float):
+def __resize_image_file(ori_img_path: Path, tar_img_path: Path, resize_factor: float):
     """将ori原始目录下的image进行resize再重新保存到目标文件夹之下
 
     Args:
@@ -77,11 +82,12 @@ def __resize_image_file(ori_img_path: Path, tar_img_path:Path, resize_factor:flo
     """
     tar_img_path.mkdir()
     for ori_img in tqdm(ori_img_path.iterdir(), desc='resize图片中···', leave=False):  # 读取原始文件夹
-        cv.imwrite(cv.resize(cv.imread(str(ori_img)), dsize=None, fx=1 / resize_factor, fy=1 / resize_factor), str(tar_img_path / f"{ori_img.name}"))
+        cv.imwrite(cv.resize(cv.imread(str(ori_img)), dsize=None, fx=1 / resize_factor, fy=1 / resize_factor),
+                   str(tar_img_path / f"{ori_img.name}"))
     return tar_img_path
 
 
-def __load_poses_bounds(path:Path, resize_factor:int, device:torch.device):
+def __load_poses_bounds(path: Path, resize_factor: int, device: torch.device):
     """将图像的pose进行处理，得到针对camear pose转换之后的结果
     c2w(pose)无需进行变换
     hwf需要处理reszie_factor
@@ -97,8 +103,9 @@ def __load_poses_bounds(path:Path, resize_factor:int, device:torch.device):
     bds = pose_bounds[..., -2:]  # 表示出bounds
     pose_and_hwf = np.reshape(pose_bounds[..., :-2], [-1, 3, 5])
     poses = pose_and_hwf[..., :-1]  # [N, 3, 4]
-    hwf = pose_and_hwf[..., -1] / resize_factor # [N, 3] 
-    bot = np.array([[[0,0,0,1]]], dtype=pose_and_hwf.dtype).repeat(poses.shape[0], axis=0)
+    poses = np.concatenate([poses[:, 1:2, :], -poses[:, 0:1, :], poses[:, 2:, :]], axis=1)  # 表示进行concatenate  交换了pose NeRF的z轴朝向负向
+    hwf = pose_and_hwf[..., -1] / resize_factor  # [N, 3]
+    bot = np.array([[[0, 0, 0, 1]]], dtype=pose_and_hwf.dtype).repeat(poses.shape[0], axis=0)
     poses = np.concatenate([poses, bot], axis=1)  # [N, 4, 4]
     intrinsic = np.zeros([hwf.shape[0], 3, 3], dtype=pose_and_hwf.dtype)
     camera_data = {
@@ -107,10 +114,11 @@ def __load_poses_bounds(path:Path, resize_factor:int, device:torch.device):
         'intrinsic': torch.from_numpy(intrinsic).to(device=device),
         'hwf': torch.from_numpy(hwf[0]).to(device=device)
     }
+
     return camera_data, pose_bounds.shape[0]
 
 
-def _load_llff_data(image_path:Path, resize_factor:float, device:torch.device):
+def _load_llff_data(image_path: Path, resize_factor: float, device: torch.device):
     """读取llffdata数据集
 
     Args:
@@ -130,21 +138,22 @@ def _load_llff_data(image_path:Path, resize_factor:float, device:torch.device):
         image_path_resize = image_path / f"images_{resize_factor}"
     else:
         image_path_resize = image_p
-    
+
     if image_path_resize.exists():  # 表示resize图片存在
         img, n_img = __load_image_file(image_path_resize, device=device)
     else:  # 表示resize图片不存在
-        img, n_img = __load_image_file(__resize_image_file(image_p, image_path_resize, resize_factor), device=device)  # 
-    
-    camera_data, n_pose = __load_poses_bounds(pd, resize_factor=resize_factor, device=device)   # 表示设备的路径
+        img, n_img = __load_image_file(__resize_image_file(image_p, image_path_resize, resize_factor),
+                                       device=device)  #
+
+    camera_data, n_pose = __load_poses_bounds(pd, resize_factor=resize_factor, device=device)  # 表示设备的路径
     assert n_pose == n_img, f"相机姿态的个数为{n_pose}个，图片个数为{n_img}个，两者不相等"
     camera_data['images'] = img
     return camera_data
-    
+
+
 def _load_pig_data():
     pass
 
+
 def _load_endo_data():
     pass
-
-    
